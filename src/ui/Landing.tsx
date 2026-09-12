@@ -51,6 +51,7 @@ export function Landing() {
         <nav aria-label="Primary">
           <a className="btn ghost" href="#how">How it works</a>
           <a className="btn ghost" href="#safety">Safety</a>
+          <a className="btn ghost" href="#credits">Credits</a>
           <a className="btn primary" href="#/demo">Explore the interactive demo</a>
         </nav>
       </header>
@@ -125,6 +126,28 @@ Publish brief  action · mocked · moderate impact`}</pre></div>
           </ul>
           <b style={{ display: 'block', marginTop: 12 }}>What it never says</b>
           <ul><li>Certified safe. Compliant. Secure by default. Production safe. Guaranteed correct.</li></ul>
+        </div>
+      </section>
+
+      <section className="section" id="credits">
+        <h2>Credits and sources</h2>
+        <p className="sub">Graphsmith builds on other people's thinking. Naming them is part of the product, not a footnote.</p>
+        <div className="cards">
+          <div className="card">
+            <h3>The idea it started from</h3>
+            <p>Ayoub Zulfiqar (Sensei), <a href="https://dev.to/ayoubzulfiqar/grpah-engineering-the-11-step-roadmap-from-loops-to-graph-architect-2f4b">Graph Engineering: The 11-Step Roadmap From Loops to Graph Architect</a> (dev.to, July 2026). The Node, Edge, State, Router vocabulary and the case for explicit topology over hidden control flow come from that article. His site: <a href="https://ayoubzulfiqar.com">ayoubzulfiqar.com</a>.</p>
+          </div>
+          <div className="card">
+            <h3>Safety and oversight framing</h3>
+            <p>NIST <a href="https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf">AI Risk Management Framework 1.0</a> and the <a href="https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf">Generative AI Profile</a> shaped the readiness checks, the abstention route, and the decision packet. The usability critique drew on Green and Petre's <a href="https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=54f8ae5828615d1fe7d61c0038cc1ec77f4697b0">Cognitive Dimensions</a> work on visual programming.</p>
+          </div>
+          <div className="card">
+            <h3>How it was made</h3>
+            <p>Idea, doctrine, and product direction: Robert Sweetman. The product critique was researched with Perplexity. The specification and this build were written with Claude Code. Built on <a href="https://reactflow.dev">React Flow</a>, React, and Vite. Source on <a href="https://github.com/e-allora/graphsmith">GitHub</a> under the Business Source License 1.1.</p>
+          </div>
+        </div>
+        <div className="note" style={{ marginTop: 14 }}>
+          <b>Who is welcome.</b> Anyone. Graphsmith is meant to be built with people whose backgrounds, opinions, and skills differ from the founder's, and to credit them by name for what they contribute. If something here is wrong, uncredited, or exclusionary, say so and it gets fixed.
         </div>
       </section>
 

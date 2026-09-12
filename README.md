@@ -35,9 +35,14 @@ src/domain/   graph spec, template, simulator, lint engine, exports, share encod
 src/ui/       landing page, workspace, canvas (React Flow), panels
 ```
 
-## Credits
+## Credits and sources
 
-Idea, doctrine, and product direction: Robert Sweetman ([LinkedIn](https://www.linkedin.com/in/robert-sweetman-74602a227/), [GitHub](https://github.com/e-allora)). Built with Claude Code.
+- **Origin of the idea:** Ayoub Zulfiqar (Sensei), [Graph Engineering: The 11-Step Roadmap From Loops to Graph Architect](https://dev.to/ayoubzulfiqar/grpah-engineering-the-11-step-roadmap-from-loops-to-graph-architect-2f4b), dev.to, July 2026. Site: [ayoubzulfiqar.com](https://ayoubzulfiqar.com). The Node, Edge, State, Router model and the argument for explicit topology come from this article.
+- **Safety and oversight framing:** NIST [AI RMF 1.0](https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf) and the [Generative AI Profile](https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf); Green and Petre, [Cognitive Dimensions of visual programming](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=54f8ae5828615d1fe7d61c0038cc1ec77f4697b0).
+- **Idea, doctrine, and product direction:** Robert Sweetman ([LinkedIn](https://www.linkedin.com/in/robert-sweetman-74602a227/), [GitHub](https://github.com/e-allora)). The product critique was researched with Perplexity; the specification and build were written with Claude Code.
+- **Built on:** [React Flow](https://reactflow.dev), React, Vite.
+
+Contributions are welcome from anyone, and contributors are credited by name. If something here is wrong or uncredited, open an issue.
 
 ## License
 
