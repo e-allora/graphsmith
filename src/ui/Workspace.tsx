@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import type { GraphProject, NodeCategory } from '../domain/types';
 import { researchBriefProject, cloneProject, templateGallery } from '../domain/template';
-import { simulate } from '../domain/simulate';
+import { simulate, type SimulationOverrides } from '../domain/simulate';
 import { lint } from '../domain/lint';
 import { decodeShare, encodeShare } from '../domain/share';
 import type { GeneratedDraft } from '../domain/draft';
@@ -48,7 +48,7 @@ export function Workspace({ shareToken }: { shareToken?: string }) {
   const select = useCallback((sel: Selection) => dispatch({ type: 'select', selection: sel }), []);
   const selectElement = useCallback((id: string) => select({ kind: project.graph.routers.some((r) => r.id === id) ? 'router' : 'node', id }), [project, select]);
 
-  const run = useCallback((scenarioId: string, overrides: { reviewerDecision?: 'approved' | 'revise' }) => {
+  const run = useCallback((scenarioId: string, overrides: SimulationOverrides) => {
     const sc = project.scenarios.find((x) => x.id === scenarioId);
     if (!sc) return;
     const result = simulate(project, sc, overrides);
@@ -185,7 +185,7 @@ export function Workspace({ shareToken }: { shareToken?: string }) {
             onConnect={(src, tgt) => { const r = connect(project, src, tgt); if (r.error) toast(r.error); else if (r.project) { commit(r.project); if (r.id) select({ kind: 'edge', id: r.id }); } }}
             onDeleteSelection={() => { if (s.selection && !s.readOnly) { commit(removeElement(project, s.selection)); select(null); } }}
           />
-          <div className={`ws-bottom ${bottomOpen ? '' : 'collapsed'}`}>
+          <div className={`ws-bottom ${bottomOpen ? '' : 'collapsed'} ${s.tab === 'evaluate' || s.tab === 'readiness' ? 'tall' : ''}`}>
             <div className="tabs" role="tablist" aria-label="Workspace views">
               {TABS.map((t) => (
                 <button key={t.id} role="tab" aria-selected={s.tab === t.id} onClick={() => { dispatch({ type: 'tab', tab: t.id }); setBottomOpen(true); }}>
@@ -198,7 +198,7 @@ export function Workspace({ shareToken }: { shareToken?: string }) {
               <button className="btn sm ghost" onClick={() => setBottomOpen((v) => !v)} aria-expanded={bottomOpen}>{bottomOpen ? 'Hide' : 'Show'}</button>
             </div>
             {bottomOpen && (
-              <div className="tab-panel" role="tabpanel">
+              <div className="tab-panel" role="tabpanel" key={s.tab}>
                 {s.tab === 'design' && (
                   <div className="two">
                     <div>

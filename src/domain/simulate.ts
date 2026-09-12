@@ -4,7 +4,10 @@ import { findElement, outgoing, elementName } from './graph';
 const STEP_MS = 250;
 const MAX_STEPS = 200;
 
-export type SimulationOverrides = { reviewerDecision?: 'approved' | 'revise' };
+export type SimulationOverrides = { reviewerDecision?: 'approved' | 'revise' | 'request_evidence' | 'stop' };
+
+export const INSUFFICIENT_LABEL = 'Insufficient evidence';
+export const INSUFFICIENT_RULE_ID = 'insufficient';
 
 function compare(actual: unknown, op: RouterRule['operator'], expected: unknown): boolean {
   switch (op) {
@@ -22,6 +25,10 @@ function compare(actual: unknown, op: RouterRule['operator'], expected: unknown)
 
 export function describeOperator(op: RouterRule['operator']): string {
   return { equals: 'is', not_equals: 'is not', greater_than: 'is greater than', greater_or_equal: 'is at least', less_than: 'is less than', includes: 'includes' }[op];
+}
+/** Operator phrase without the leading verb, for "were …" sentences. */
+function bareOperator(op: RouterRule['operator']): string {
+  return { equals: '', not_equals: 'not ', greater_than: 'greater than ', greater_or_equal: 'at least ', less_than: 'less than ', includes: 'including ' }[op];
 }
 
 function fmt(v: unknown): string {
@@ -101,10 +108,16 @@ export function simulate(project: GraphProject, scenario: TestScenario, override
     }
     if (node.category === 'human_review' && overrides.reviewerDecision) {
       const override = overrides.reviewerDecision;
+      const notes = { approved: 'Approved by the demo operator.', revise: 'Demo operator requested a revision.', request_evidence: 'Demo operator asked for more evidence before deciding.', stop: 'Demo operator stopped the workflow.' }[override];
       // Honour the override on the first visit only; a second visit after revision always approves so the run terminates.
-      patch = visits[id] === 1 ? { ...patch, reviewerDecision: override, reviewerNotes: override === 'approved' ? 'Approved by the demo operator.' : 'Demo operator requested a revision.' } : { ...patch, reviewerDecision: 'approved' };
+      patch = visits[id] === 1 ? { ...patch, reviewerDecision: override === 'approved' ? 'approved' : override === 'stop' ? 'stopped' : 'revise', reviewerNotes: notes } : { ...patch, reviewerDecision: 'approved' };
     }
     applyPatch(patch);
+    if (node.category === 'human_review' && state.reviewerDecision === 'stopped') {
+      push({ kind: 'checkpoint', elementId: id, elementName: node.name, patch, explanation: 'The reviewer stopped the workflow. Nothing after this checkpoint runs, and the State so far is kept for the record.' });
+      stoppedReason = 'Stopped by the reviewer at the checkpoint.';
+      return undefined;
+    }
 
     const normal = outs.filter((e) => e.type !== 'failure');
     const parallel = normal.filter((e) => e.type === 'parallel');
@@ -136,23 +149,34 @@ export function simulate(project: GraphProject, scenario: TestScenario, override
     visits[id] = (visits[id] ?? 0) + 1;
     visitedNodeIds.push(id);
     const evaluated = r.rules.map((rule) => ({ ruleId: rule.id, field: rule.field, actual: state[rule.field], operator: rule.operator, expected: rule.value, matched: compare(state[rule.field], rule.operator, rule.value), label: rule.label }));
-    const hit = evaluated.find((x) => x.matched);
+    const missing = evaluated.filter((x) => x.actual === undefined || x.actual === null);
+    const insufficient = missing.length > 0 && !!r.insufficientEvidenceTargetNodeId;
+    const hit = insufficient ? undefined : evaluated.find((x) => x.matched);
     const rule = hit ? r.rules.find((x) => x.id === hit.ruleId) : undefined;
-    const targetId = rule ? rule.targetNodeId : r.defaultTargetNodeId;
-    const label = rule ? rule.label : r.defaultLabel;
+    const targetId = insufficient ? r.insufficientEvidenceTargetNodeId! : rule ? rule.targetNodeId : r.defaultTargetNodeId;
+    const label = insufficient ? INSUFFICIENT_LABEL : rule ? rule.label : r.defaultLabel;
     const outs = outgoing(g, id);
-    const edge = outs.find((e) => (rule ? e.routerRuleId === rule.id : !e.routerRuleId && e.targetNodeId === r.defaultTargetNodeId)) ?? outs.find((e) => e.targetNodeId === targetId);
+    const edge = outs.find((e) => (insufficient ? e.routerRuleId === INSUFFICIENT_RULE_ID : rule ? e.routerRuleId === rule.id : !e.routerRuleId && e.targetNodeId === r.defaultTargetNodeId)) ?? outs.find((e) => e.targetNodeId === targetId);
     const iteration = typeof state.iterationCount === 'number' ? state.iterationCount : 0;
     const lines = evaluated.map((x) => `${x.field} = ${fmt(x.actual)}. Rule: ${x.field} ${describeOperator(x.operator)} ${fmt(x.expected)}. Matched: ${x.matched ? 'yes' : 'no'}.`);
-    const why = `${lines.join(' ')} Selected path: ${label}${rule ? '' : ' (the safe default)'}.`;
+    const why = insufficient
+      ? `${missing.map((x) => `${x.field} has no value`).join('; ')}. The rule cannot be evaluated, so the decision abstains. Selected path: ${label}, to ${elementName(g, targetId)}.`
+      : `${lines.join(' ')} Selected path: ${label}${rule ? '' : ' (the safe default)'}.`;
+    // What could change the outcome
+    const counterfactuals: string[] = [];
+    if (insufficient) counterfactuals.push(`If ${missing.map((x) => x.field).join(' and ')} had a value, the rules would be evaluated and the path would be "${r.rules[0]?.label ?? r.defaultLabel}" or "${r.defaultLabel}".`);
+    else if (rule) counterfactuals.push(`If ${rule.field} were not ${bareOperator(rule.operator)}${fmt(rule.value)}, the path would be "${r.defaultLabel}" (${elementName(g, r.defaultTargetNodeId)}).`);
+    else for (const x of r.rules) counterfactuals.push(`If ${x.field} were ${bareOperator(x.operator)}${fmt(x.value)}, the path would be "${x.label}" (${elementName(g, x.targetNodeId)}).`);
+    if (!insufficient && r.insufficientEvidenceTargetNodeId) counterfactuals.push(`If ${r.rules.map((x) => x.field).join(' or ')} had no value, the decision would abstain to ${elementName(g, r.insufficientEvidenceTargetNodeId)}.`);
+    if (r.maxIterations !== undefined && !rule && !insufficient) counterfactuals.push(`Changing the threshold or the loop limit (${r.maxIterations}) would change how many improvement passes can run.`);
     routerOutcomes.push(label);
 
-    if (!rule && r.maxIterations !== undefined && iteration >= r.maxIterations) {
-      push({ kind: 'router', elementId: id, elementName: r.question, patch: {}, explanation: `${why} Loop limit reached (${r.maxIterations} iterations). The run stops with the evidence it has.`, routerDetail: { evaluated, selectedLabel: label, usedDefault: true } });
+    if (!rule && !insufficient && r.maxIterations !== undefined && iteration >= r.maxIterations) {
+      push({ kind: 'router', elementId: id, elementName: r.question, patch: {}, explanation: `${why} Loop limit reached (${r.maxIterations} iterations). The run stops with the evidence it has.`, routerDetail: { evaluated, selectedLabel: label, usedDefault: true, insufficient: false, counterfactuals } });
       stoppedReason = `Loop limit of ${r.maxIterations} reached at "${r.question}".`;
       return undefined;
     }
-    push({ kind: 'router', elementId: id, elementName: r.question, patch: {}, selectedEdgeId: edge?.id, nextElementId: targetId, explanation: why, routerDetail: { evaluated, selectedLabel: label, usedDefault: !rule } });
+    push({ kind: 'router', elementId: id, elementName: r.question, patch: {}, selectedEdgeId: edge?.id, nextElementId: targetId, explanation: why, routerDetail: { evaluated, selectedLabel: label, usedDefault: !rule && !insufficient, insufficient, counterfactuals } });
     if (!edge) { stoppedReason = `Decision "${r.question}" points to a missing step.`; return undefined; }
     traversedEdgeIds.push(edge.id);
     return edge;

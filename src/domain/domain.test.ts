@@ -37,6 +37,21 @@ describe('simulator', () => {
     expect((r.finalState.errors as unknown[]).length).toBe(2);
     expect(JSON.stringify(r.finalState.errors)).not.toMatch(/stack|at /);
   });
+  it('abstains when the decision has no evidence and explains what would change the outcome', () => {
+    const r = simulate(p, byId('evidence_unavailable'));
+    const router = r.steps.find((st) => st.kind === 'router')!;
+    expect(router.routerDetail?.insufficient).toBe(true);
+    expect(router.nextElementId).toBe('human_review');
+    expect(router.routerDetail?.counterfactuals[0]).toMatch(/had a value/);
+    const ok = simulate(p, byId('evidence_sufficient')).steps.find((st) => st.kind === 'router')!;
+    expect(ok.routerDetail?.counterfactuals.join(' ')).toMatch(/were not at least 0.8/);
+    expect(r.reachedEnd).toBe(true);
+  });
+  it('lets the reviewer stop the workflow', () => {
+    const r = simulate(p, byId('evidence_sufficient'), { reviewerDecision: 'stop' });
+    expect(r.reachedEnd).toBe(false);
+    expect(r.stoppedReason).toMatch(/reviewer/);
+  });
   it('lets the demo operator override the reviewer decision', () => {
     const r = simulate(p, byId('evidence_sufficient'), { reviewerDecision: 'revise' });
     expect(r.routerOutcomes).toEqual(['Yes, draft the brief', 'Revision requested', 'Approved']);
@@ -59,6 +74,10 @@ describe('lint', () => {
     expect(r.gaps).toBe(0);
     expect(r.findings.some((f) => f.message.includes('Research source A') && f.message.includes('no failure path'))).toBe(true);
     expect(r.findings.some((f) => f.message.includes('maximum of 2 iterations'))).toBe(true);
+    const cov = Object.fromEntries(r.coverage.map((c) => [c.label, `${c.done}/${c.total}`]));
+    expect(cov['Steps exercised']).toBe('15/15');
+    expect(cov['Decision outcomes covered']).toBe('5/5');
+    expect(cov['Failure paths exercised']).toBe('1/1');
   });
   it('flags a router without a default path', () => {
     const q = structuredClone(p);
@@ -98,6 +117,10 @@ describe('drafter', () => {
     const sim = simulate(r.draft.project, r.draft.project.scenarios[0]);
     expect(sim.reachedEnd).toBe(true);
     expect(lint(r.draft.project, [sim]).gaps).toBe(0);
+    expect(r.draft.interpretation.choices.find((c) => c.key === 'review')?.on).toBe(true);
+    const seq = draftFromDescription('Plan research, investigate independent questions in parallel, combine evidence, then publish it.', { parallel: false, review: true });
+    expect(seq.ok && seq.draft.project.graph.edges.some((e) => e.type === 'parallel')).toBe(false);
+    expect(seq.ok && seq.draft.project.graph.nodes.some((n) => n.category === 'human_review')).toBe(true);
   });
   it('refuses restricted domains and strips secrets', () => {
     expect(draftFromDescription('Screen candidates for hiring and rank them').ok).toBe(false);

@@ -20,6 +20,7 @@ function StepNode({ data, selected }: NodeProps<StepRF>) {
       {data.entry && <span className="tag entry">ENTRY</span>}
       {data.end && <span className="tag end">END</span>}
       {n.category === 'action' && <span className="tag impact">{n.impact} impact · {n.sideEffect}</span>}
+      {n.category === 'human_review' && n.oversight && <span className="tag review">{{ inform: 'inform only', audit_after: 'audit after', approve_before: 'approve before action', choose: 'chooses path', block: 'block and escalate' }[n.oversight.authority]}</span>}
       <div className="head">
         <span className="cat" style={{ background: CATEGORY_COLOR[n.category] }} aria-hidden="true">{CATEGORY_GLYPH[n.category]}</span>
         <span className="name">{n.name}</span>
@@ -76,7 +77,7 @@ export function Canvas(p: Props) {
       data: {
         router: r, active: p.activeId === r.id, visited: p.visitedIds.has(r.id), readOnly: p.readOnly,
         ruleText: r.rules.map((rule) => `if ${rule.field} ${describeOperator(rule.operator)} ${JSON.stringify(rule.value)} → ${elementName(g, rule.targetNodeId) || '?'}`).join('\n'),
-        defaultText: elementName(g, r.defaultTargetNodeId) || 'missing default',
+        defaultText: `${elementName(g, r.defaultTargetNodeId) || 'missing default'}${r.insufficientEvidenceTargetNodeId ? `\n? no value → ${elementName(g, r.insufficientEvidenceTargetNodeId)}` : ''}`,
       },
     }));
     return [...steps, ...routers];

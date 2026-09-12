@@ -30,6 +30,9 @@ export function ReadinessPanel({ readiness: r, project, onSelect }: Props) {
         </div>
         <div>Status: <b style={{ display: 'inline' }}>{r.status}</b></div>
         <div className="not">Not yet: {r.notYet}. These checks describe the design, not a running system.</div>
+        <div className="coverage" aria-label="Test coverage">
+          {r.coverage.map((c) => <div key={c.label}><b>{c.done} <span style={{ fontSize: 12 }}>of</span> {c.total}</b><span>{c.label}</span></div>)}
+        </div>
       </div>
       <div className="two">
         {GROUPS.map((grp) => {

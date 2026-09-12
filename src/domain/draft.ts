@@ -1,8 +1,18 @@
 import type { GraphProject, GraphNode, GraphEdge, Router, StateField, NodeCategory, TestScenario } from './types';
 import { autoLayout } from './layout';
 
+export type DraftOptions = { parallel?: boolean; review?: boolean; loop?: boolean };
+
+export type Interpretation = {
+  goal: string;
+  actors: string[];
+  consequentialActions: string[];
+  choices: { key: keyof DraftOptions; label: string; on: boolean; keep: string; drop: string }[];
+};
+
 export type GeneratedDraft = {
   summary: string;
+  interpretation: Interpretation;
   project: GraphProject;
   assumptions: string[];
   openQuestions: string[];
@@ -46,17 +56,22 @@ function splitClauses(text: string): string[] {
 }
 
 /** Rule-based drafter. Runs entirely in the browser; a model-backed drafter would replace this behind the same output shape. */
-export function draftFromDescription(text: string): DraftResult {
+export function draftFromDescription(text: string, opts: DraftOptions = {}): DraftResult {
   const trimmed = text.trim();
   if (trimmed.length < 12) return { ok: false, reason: 'Describe the workflow in at least one full sentence.' };
   for (const re of RESTRICTED) if (re.test(trimmed)) return { ok: false, reason: 'This demo does not draft workflows for hiring, credit, insurance, medical, legal, policing, immigration, or public-benefit decisions. Those need a review process the demo cannot provide.' };
   const secretsRemoved = SECRET.test(trimmed);
   const clean = trimmed.replace(SECRET, '[removed]');
-  const clauses = splitClauses(clean);
+  let clauses = splitClauses(clean);
   if (clauses.length === 0) return { ok: false, reason: 'Could not find any steps in that description.' };
 
-  const wantsParallel = /\b(parallel|independent|at the same time|simultaneous|concurrent|several sources|multiple sources)\b/i.test(clean);
-  const wantsLoop = /\b(repeat|retry|again|loop|if .*(incomplete|insufficient|missing|not enough)|until)\b/i.test(clean);
+  const detectedParallel = /\b(parallel|independent|at the same time|simultaneous|concurrent|several sources|multiple sources)\b/i.test(clean);
+  const detectedLoop = /\b(repeat|retry|again|loop|if .*(incomplete|insufficient|missing|not enough)|until)\b/i.test(clean);
+  const detectedReview = clauses.some((c) => guess(c).category === 'human_review');
+  const wantsParallel = opts.parallel ?? detectedParallel;
+  const wantsLoop = opts.loop ?? detectedLoop;
+  const wantsReview = opts.review ?? detectedReview;
+  if (wantsReview && !detectedReview) clauses = [...clauses, 'ask a person to review and approve the result'];
 
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
@@ -77,7 +92,8 @@ export function draftFromDescription(text: string): DraftResult {
   let firstRetrieveId: string | undefined;
 
   clauses.forEach((clause, i) => {
-    const g = guess(clause);
+    let g = guess(clause);
+    if (g.category === 'human_review' && !wantsReview) g = { category: 'transform', reads: ['draft'], writes: ['draft'], sideEffect: 'none', impact: 'low' };
     const id = `s${i + 1}`;
     if (i === 0 && g.category !== 'input') {
       nodes.push(mk('s0', 'Receive request', { category: 'input', reads: [], writes: ['goal'], sideEffect: 'none', impact: 'low' }, 'Capture the request that starts the workflow.'));
@@ -189,9 +205,24 @@ export function draftFromDescription(text: string): DraftResult {
   }
 
   const project: GraphProject = { id: 'generated_draft', name: 'Generated draft', description: clean.slice(0, 200), status: 'draft', graph, stateSchema: { version: '1', fields }, scenarios: [scenario] };
+  const actors = new Set<string>(['Workflow operator']);
+  if (wantsReview) actors.add('Reviewer (a person)');
+  for (const [re, who] of [[/\bcustomer/i, 'Customer'], [/\b(team|colleague|staff)/i, 'Team members'], [/\b(user|requester)/i, 'Requester'], [/\b(analyst|researcher)/i, 'Analyst']] as const) if (re.test(clean)) actors.add(who);
+  if (nodes.some((n) => n.category === 'retrieve')) actors.add('Mock data sources');
+  const interpretation: Interpretation = {
+    goal: clean.length > 160 ? clean.slice(0, 157) + '…' : clean,
+    actors: [...actors],
+    consequentialActions: nodes.filter((n) => n.category === 'action').map((n) => `${n.name} (${n.impact} impact, mocked)`),
+    choices: [
+      { key: 'parallel', label: 'Research tasks can run independently', on: wantsParallel, keep: 'Keep parallel', drop: 'Make sequential' },
+      { key: 'review', label: 'A person approves before the result is used', on: wantsReview, keep: 'Keep checkpoint', drop: 'Remove checkpoint' },
+      { key: 'loop', label: 'Incomplete results trigger one more pass', on: wantsLoop && !!validateId, keep: 'Keep retry loop', drop: 'Skip retry' },
+    ],
+  };
   return {
     ok: true,
     draft: {
+      interpretation,
       summary: `${nodes.length} steps, ${routers.length} decision${routers.length === 1 ? '' : 's'}, ${edges.length} connections, drafted from ${clauses.length} phrases in your description.`,
       project, assumptions, openQuestions, safetyNotes,
       suggestedScenarios: ['Expected path where every step succeeds', routers.length ? 'Each decision takes its default path at least once' : 'A step returns an empty result', 'A retrieve or action step fails and the run stops'],

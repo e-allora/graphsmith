@@ -1,7 +1,8 @@
-import type { GraphProject, Finding, SimulationResult } from './types';
+import type { GraphProject, Finding, SimulationResult, CoverageCount } from './types';
+import { INSUFFICIENT_LABEL } from './simulate';
 import { allIds, reachableFrom, outgoing, incoming, cycleMembers, writersOf, elementName } from './graph';
 
-export type Readiness = { findings: Finding[]; passes: number; warnings: number; gaps: number; status: string; notYet: string };
+export type Readiness = { findings: Finding[]; passes: number; warnings: number; gaps: number; status: string; notYet: string; coverage: CoverageCount[] };
 
 export function lint(project: GraphProject, sims: SimulationResult[] = []): Readiness {
   const g = project.graph;
@@ -83,6 +84,14 @@ export function lint(project: GraphProject, sims: SimulationResult[] = []): Read
     if (upstream.length) add('safety', 'pass', `High-impact action "${a.name}" has an oversight checkpoint before it.`, a.id);
     else add('safety', 'gap', `High-impact action "${a.name}" has no human checkpoint before it.`, a.id);
   }
+  for (const n of g.nodes.filter((x) => x.category === 'human_review')) {
+    if (n.oversight) add('safety', 'pass', `"${n.name}" declares its authority (${n.oversight.authority.replace('_', ' ')}) and what the reviewer sees (${n.oversight.sees.length} fields).`, n.id);
+    else add('safety', 'warn', `"${n.name}" does not say what authority the reviewer has or what they will see. A yes/no prompt invites rubber-stamping.`, n.id);
+  }
+  for (const r of g.routers) {
+    if (r.insufficientEvidenceTargetNodeId) add('safety', 'pass', `"${r.question}" can abstain: when its evidence is missing it routes to ${elementName(g, r.insufficientEvidenceTargetNodeId)}.`, r.id);
+    else add('safety', 'warn', `"${r.question}" has no insufficient-evidence route. With a missing value it will silently take the default.`, r.id);
+  }
   const sensitive = fields.filter((x) => ['confidential', 'personal', 'restricted'].includes(x.classification));
   const leaking = sensitive.filter((x) => x.exportPolicy === 'include');
   if (leaking.length === 0) add('safety', 'pass', `Sensitive State fields (${sensitive.length}) are redacted or excluded from public export.`);
@@ -91,7 +100,7 @@ export function lint(project: GraphProject, sims: SimulationResult[] = []): Read
   // Evaluation
   const outcomes = new Set(sims.flatMap((s) => s.routerOutcomes));
   for (const r of g.routers) {
-    for (const label of [...r.rules.map((x) => x.label), r.defaultLabel]) {
+    for (const label of [...r.rules.map((x) => x.label), r.defaultLabel, ...(r.insufficientEvidenceTargetNodeId ? [INSUFFICIENT_LABEL] : [])]) {
       if (outcomes.has(label)) add('evaluation', 'pass', `Outcome "${label}" of "${r.question}" is covered by a scenario.`, r.id);
       else add('evaluation', 'warn', `Outcome "${label}" of "${r.question}" has no scenario.`, r.id);
     }
@@ -106,9 +115,23 @@ export function lint(project: GraphProject, sims: SimulationResult[] = []): Read
   }
   for (const s of sims) if (s.stoppedReason) add('evaluation', 'warn', `Scenario "${s.scenarioId}" stopped early: ${s.stoppedReason}`);
 
+  // Coverage counts: what the scenarios actually exercised
+  const visited = new Set(sims.flatMap((x) => x.visitedNodeIds));
+  const outcomeTotal = g.routers.reduce((n, r) => n + r.rules.length + 1 + (r.insufficientEvidenceTargetNodeId ? 1 : 0), 0);
+  const outcomeDone = g.routers.reduce((n, r) => n + [...r.rules.map((x) => x.label), r.defaultLabel, ...(r.insufficientEvidenceTargetNodeId ? [INSUFFICIENT_LABEL] : [])].filter((l) => outcomes.has(l)).length, 0);
+  const failEdges = g.edges.filter((x) => x.type === 'failure');
+  const reviews = g.nodes.filter((x) => x.category === 'human_review');
+  const coverage: CoverageCount[] = [
+    { label: 'Steps exercised', done: g.nodes.filter((n) => visited.has(n.id)).length, total: g.nodes.length },
+    { label: 'Decision outcomes covered', done: outcomeDone, total: outcomeTotal },
+    { label: 'Failure paths exercised', done: failEdges.filter((e) => traversed.has(e.id)).length, total: failEdges.length },
+    { label: 'Human checkpoints exercised', done: reviews.filter((n) => visited.has(n.id)).length, total: reviews.length },
+    { label: 'Scenarios reaching the end', done: sims.filter((x) => x.reachedEnd).length, total: sims.length },
+  ];
+
   const passes = f.filter((x) => x.level === 'pass').length;
   const warnings = f.filter((x) => x.level === 'warn').length;
   const gaps = f.filter((x) => x.level === 'gap').length;
   const status = gaps ? 'Prototype with known gaps: fix the gaps before a design review' : 'Prototype: suitable for demonstration and design review';
-  return { findings: f, passes, warnings, gaps, status, notYet: 'Runtime-ready or production-certified' };
+  return { findings: f, passes, warnings, gaps, status, notYet: 'Runtime-ready or production-certified', coverage };
 }

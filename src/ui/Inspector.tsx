@@ -1,6 +1,6 @@
-import type { GraphProject, GraphNode, Router, GraphEdge, StateField, NodeCategory, RuleOperator, EdgeType, Classification, ExportPolicy, FieldType } from '../domain/types';
+import type { GraphProject, GraphNode, Router, GraphEdge, StateField, NodeCategory, RuleOperator, EdgeType, Classification, ExportPolicy, FieldType, OversightAuthority, ReviewerAction } from '../domain/types';
 import { readersOf, writersOf, routersReading, elementName } from '../domain/graph';
-import { describeOperator } from '../domain/simulate';
+import { describeOperator, INSUFFICIENT_RULE_ID } from '../domain/simulate';
 import { CATEGORY_LABEL, CATEGORY_HELP, EDGE_LABEL, CLASS_HELP } from './labels';
 import type { Selection } from './store';
 
@@ -108,6 +108,24 @@ export function Inspector(p: Props) {
             <option value="stop">stop the run</option><option value="route_to_recovery">follow the failure path</option><option value="retry">retry once</option>
           </select>
         </div>
+        {n.category === 'human_review' && (() => {
+          const o = n.oversight ?? { authority: 'approve_before' as OversightAuthority, sees: n.reads, actions: ['approve', 'revise'] as ReviewerAction[] };
+          const setO = (patch: Partial<typeof o>) => p.onNode(n.id, { oversight: { ...o, ...patch } });
+          const AUTH: { v: OversightAuthority; l: string }[] = [{ v: 'inform', l: 'Inform only' }, { v: 'audit_after', l: 'Audit after execution' }, { v: 'approve_before', l: 'Approve before action' }, { v: 'choose', l: 'Choose among options' }, { v: 'block', l: 'Block and escalate' }];
+          const ACTS: { v: ReviewerAction; l: string }[] = [{ v: 'approve', l: 'Approve' }, { v: 'revise', l: 'Request revision' }, { v: 'request_evidence', l: 'Request more evidence' }, { v: 'stop', l: 'Stop the workflow' }];
+          return (
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 8 }}>
+              <div className="panel-h" style={{ padding: '0 0 6px' }}>Oversight checkpoint</div>
+              {!n.oversight && <div className="note warn">Not configured yet. A yes/no prompt invites rubber-stamping; say what the reviewer decides and what they see.</div>}
+              <div className="field"><label>Decision authority</label><select disabled={ro} value={o.authority} onChange={(e) => setO({ authority: e.target.value as OversightAuthority })}>{AUTH.map((a) => <option key={a.v} value={a.v}>{a.l}</option>)}</select></div>
+              <div className="field"><label>Who decides</label><input disabled={ro} value={o.who ?? ''} placeholder="a role, not a name" onChange={(e) => setO({ who: e.target.value })} /></div>
+              <ListEditor label="What they see (State fields)" value={o.sees} readOnly={ro} options={fieldIds} onChange={(sees) => setO({ sees })} />
+              <div className="field"><label>What they can do</label>
+                <div className="chips">{ACTS.map((a) => <label key={a.v} className="chip" style={{ display: 'inline-flex', gap: 4 }}><input type="checkbox" disabled={ro} checked={o.actions.includes(a.v)} onChange={(e) => setO({ actions: e.target.checked ? [...o.actions, a.v] : o.actions.filter((x) => x !== a.v) })} />{a.l}</label>)}</div>
+              </div>
+            </div>
+          );
+        })()}
         {n.sideEffect === 'external' && <div className="note warn">Demo mode does not allow real external actions. This will show as a gap in Readiness.</div>}
         <div className="panel-h" style={{ padding: '10px 0 4px' }}>Safety notes</div>
         <ul className="hint" style={{ margin: 0, paddingLeft: 16 }}>
@@ -158,6 +176,10 @@ export function Inspector(p: Props) {
             <div className="field"><label>Otherwise go to (safe default)</label><select disabled={ro} value={r.defaultTargetNodeId} onChange={(e) => p.onRouter(r.id, { defaultTargetNodeId: e.target.value })}><option value="">choose…</option>{targets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
             <div className="field"><label>Default label</label><input disabled={ro} value={r.defaultLabel} onChange={(e) => p.onRouter(r.id, { defaultLabel: e.target.value })} /></div>
           </div>
+          <div className="field"><label>When the evidence is missing, go to (abstain)</label>
+            <select disabled={ro} value={r.insufficientEvidenceTargetNodeId ?? ''} onChange={(e) => p.onRouter(r.id, { insufficientEvidenceTargetNodeId: e.target.value || undefined })}><option value="">no abstention route (takes the default)</option>{targets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            <span className="hint">If a rule's field has no value, the decision does not guess. It goes here.</span>
+          </div>
           <div className="field"><label>Maximum loops through this decision</label><input type="number" min={0} max={10} disabled={ro} value={r.maxIterations ?? ''} onChange={(e) => p.onRouter(r.id, { maxIterations: e.target.value === '' ? undefined : Number(e.target.value) })} /></div>
         </div>
         <div className="note">A decision is only valid with a visible default path. The target of a rule also needs a connection on the canvas; drag from the decision's bottom dot to create one.</div>
@@ -184,6 +206,7 @@ export function Inspector(p: Props) {
             <select disabled={ro} value={e.routerRuleId ?? ''} onChange={(ev) => p.onEdge(e.id, { routerRuleId: ev.target.value || undefined })}>
               <option value="">the safe default applies</option>
               {fromRouter.rules.map((rule) => <option key={rule.id} value={rule.id}>rule: {rule.label}</option>)}
+              <option value={INSUFFICIENT_RULE_ID}>the evidence is missing (abstain)</option>
             </select>
           </div>
         )}

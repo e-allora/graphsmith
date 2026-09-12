@@ -24,7 +24,19 @@ export type GraphNode = {
   sideEffect: SideEffect;
   impact: Impact;
   failureMode?: FailureMode;
+  oversight?: Oversight;
   position: { x: number; y: number };
+};
+
+export type OversightAuthority = 'inform' | 'audit_after' | 'approve_before' | 'choose' | 'block';
+export type ReviewerAction = 'approve' | 'revise' | 'request_evidence' | 'stop';
+
+/** Configuration of a human review checkpoint: what authority the person has, what they see, what they can do. */
+export type Oversight = {
+  authority: OversightAuthority;
+  sees: string[];
+  actions: ReviewerAction[];
+  who?: string;
 };
 
 export type EdgeType = 'default' | 'success' | 'failure' | 'retry' | 'review_resume' | 'parallel' | 'join';
@@ -56,6 +68,7 @@ export type Router = {
   rules: RouterRule[];
   defaultTargetNodeId: string;
   defaultLabel: string;
+  /** Where to go when a rule's field has no value. The abstention route. */
   insufficientEvidenceTargetNodeId?: string;
   maxIterations?: number;
   position: { x: number; y: number };
@@ -134,6 +147,8 @@ export type TraceStep = {
     evaluated: { ruleId: string; field: string; actual: unknown; operator: RuleOperator; expected: unknown; matched: boolean; label: string }[];
     selectedLabel: string;
     usedDefault: boolean;
+    insufficient: boolean;
+    counterfactuals: string[];
   };
   origins: Record<string, ValueOrigin>;
 };
@@ -148,6 +163,8 @@ export type SimulationResult = {
   routerOutcomes: string[];
   stoppedReason?: string;
 };
+
+export type CoverageCount = { label: string; done: number; total: number };
 
 export type Finding = {
   id: string;

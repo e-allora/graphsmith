@@ -1,4 +1,5 @@
-import type { GraphProject, TraceStep } from '../domain/types';
+import type { GraphProject, TraceStep, ReviewerAction } from '../domain/types';
+import { elementName, outgoing } from '../domain/graph';
 import type { SimState } from './store';
 import type { SimulationOverrides } from '../domain/simulate';
 
@@ -42,6 +43,8 @@ export function EvaluatePanel(p: Props) {
               <option value="">as scripted in the scenario</option>
               <option value="approved">Approve</option>
               <option value="revise">Request revision</option>
+              <option value="request_evidence">Request more evidence</option>
+              <option value="stop">Stop the workflow</option>
             </select>
           </div>
         )}
@@ -73,20 +76,18 @@ export function EvaluatePanel(p: Props) {
               <span className="hint mono">t+{(step.timestamp / 1000).toFixed(2)}s</span>
             </div>
             {step.routerDetail ? (
-              <div className="rule">
-                <b>Why this path?</b>{'\n'}
-                {step.routerDetail.evaluated.map((ev) => `${ev.field} = ${JSON.stringify(ev.actual)}\nRule: ${ev.field} ${ev.operator.replace(/_/g, ' ')} ${JSON.stringify(ev.expected)}\nMatched: ${ev.matched ? 'yes' : 'no'}\n`).join('\n')}
-                {'\n'}Selected path: <b>{step.routerDetail.selectedLabel}</b>{step.routerDetail.usedDefault ? ' (safe default)' : ''}
+              <div>
+                <div className="rule">
+                  <b>What happened</b>{'\n'}Path taken: <b>{step.routerDetail.selectedLabel}</b>{step.routerDetail.usedDefault ? ' (safe default)' : step.routerDetail.insufficient ? ' (abstained)' : ''}{'\n\n'}
+                  <b>Why</b>{'\n'}
+                  {step.routerDetail.evaluated.map((ev) => `${ev.field} = ${ev.actual === undefined || ev.actual === null ? 'no value' : JSON.stringify(ev.actual)}\nRule: ${ev.field} ${ev.operator.replace(/_/g, ' ')} ${JSON.stringify(ev.expected)}\nMatched: ${ev.actual === undefined || ev.actual === null ? 'cannot evaluate' : ev.matched ? 'yes' : 'no'}\n`).join('\n')}
+                  {'\n'}<b>What could change the outcome</b>{'\n'}{step.routerDetail.counterfactuals.map((c) => `• ${c}`).join('\n')}
+                </div>
               </div>
             ) : (
               <p style={{ margin: '6px 0' }}>{step.explanation}</p>
             )}
-            {step.kind === 'checkpoint' && (
-              <div className="note" style={{ borderColor: 'var(--review)', background: 'var(--review-soft)', color: '#4c1d95' }}>
-                <b>Reviewer decision packet.</b> Goal: {String(step.stateAfter.researchGoal ?? step.stateAfter.goal ?? '–')}. Coverage: {String(step.stateAfter.coverageScore ?? step.stateAfter.score ?? '–')}. Iterations so far: {String(step.stateAfter.iterationCount ?? 0)}. Draft: {String(step.stateAfter.draftBrief ?? step.stateAfter.draft ?? '–').slice(0, 90)}…
-                <br />Decision in this run: <b>{String(step.stateAfter.reviewerDecision)}</b>. Change it with the reviewer selector on the left.
-              </div>
-            )}
+            {step.kind === 'checkpoint' && <DecisionPacket project={p.project} step={step} onDecide={(d) => scenario && p.onRun(scenario.id, { reviewerDecision: d })} />}
             <div className="panel-h" style={{ padding: '10px 0 4px' }}>State changes</div>
             {patchLines(step).length ? <ul className="mono" style={{ margin: 0, paddingLeft: 16, fontSize: 12 }}>{patchLines(step).map((l) => <li key={l}>+ {l}</li>)}</ul> : <span className="hint">none</span>}
           </div>
@@ -110,6 +111,51 @@ export function EvaluatePanel(p: Props) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+
+const ACTION_LABEL: Record<ReviewerAction, string> = { approve: 'Approve', revise: 'Request revision', request_evidence: 'Request more evidence', stop: 'Stop the workflow' };
+const ACTION_OVERRIDE: Record<ReviewerAction, SimulationOverrides['reviewerDecision']> = { approve: 'approved', revise: 'revise', request_evidence: 'request_evidence', stop: 'stop' };
+const AUTHORITY_TEXT = { inform: 'is informed; the workflow continues either way', audit_after: 'reviews after the fact; the workflow continues', approve_before: 'must approve before the next action runs', choose: 'chooses which path the workflow takes', block: 'can block the workflow and escalate' };
+
+function fmtValue(v: unknown): string {
+  if (v === undefined || v === null || v === '') return 'no value';
+  if (typeof v === 'string') return v.length > 90 ? v.slice(0, 90) + '…' : v;
+  if (Array.isArray(v) && v.length === 0) return 'none';
+  const s = JSON.stringify(v);
+  return s.length > 90 ? s.slice(0, 90) + '…' : s;
+}
+
+/** The reviewer sees evidence and a rationale, not a yes/no prompt. */
+function DecisionPacket({ project, step, onDecide }: { project: GraphProject; step: TraceStep; onDecide: (d: NonNullable<SimulationOverrides['reviewerDecision']>) => void }) {
+  const g = project.graph;
+  const node = g.nodes.find((n) => n.id === step.elementId);
+  const o = node?.oversight;
+  const sees = o?.sees ?? node?.reads ?? [];
+  const actions = o?.actions ?? (['approve', 'revise'] as ReviewerAction[]);
+  const next = outgoing(g, step.elementId)[0];
+  const nextRouter = next ? g.routers.find((r) => r.id === next.targetNodeId) : undefined;
+  const proposed = nextRouter ? nextRouter.rules[0] && elementName(g, nextRouter.rules[0].targetNodeId) : next ? elementName(g, next.targetNodeId) : undefined;
+  const st = step.stateAfter;
+  const gaps = Array.isArray(st.coverageGaps) ? (st.coverageGaps as string[]) : [];
+  const errors = Array.isArray(st.errors) ? (st.errors as { message: string }[]) : [];
+  const uncertainty = [...gaps, ...errors.map((e) => `Recorded error: ${e.message}`), ...(st.coverageScore === null || st.coverageScore === undefined ? ['No coverage score is available; the decision before this step abstained.'] : [])];
+  return (
+    <div className="packet" aria-label="Reviewer decision packet">
+      <h4>Reviewer decision packet</h4>
+      <dl>
+        <dt>Proposed action</dt><dd>{proposed ? `Continue to ${proposed}` : 'Continue'}</dd>
+        <dt>Why a person</dt><dd>{o ? `${o.who ?? 'The reviewer'} ${AUTHORITY_TEXT[o.authority]}.` : 'This checkpoint has no declared authority; see Readiness.'} {node?.description}</dd>
+        <dt>Evidence</dt><dd>{sees.length ? <ul style={{ margin: 0, paddingLeft: 16 }}>{sees.map((f) => <li key={f}><code>{f}</code>: {fmtValue(st[f])}</li>)}</ul> : 'none declared'}</dd>
+        <dt>Uncertainty</dt><dd>{uncertainty.length ? <ul style={{ margin: 0, paddingLeft: 16 }}>{uncertainty.map((u) => <li key={u}>{u}</li>)}</ul> : 'No open gaps or errors recorded.'}</dd>
+        <dt>Decision in this run</dt><dd><b>{String(st.reviewerDecision)}</b>{st.reviewerNotes ? ` — "${String(st.reviewerNotes)}"` : ''}</dd>
+      </dl>
+      <div className="acts">
+        {actions.map((a) => <button key={a} className={`btn sm ${a === 'approve' ? 'accent' : a === 'stop' ? 'danger' : ''}`} onClick={() => onDecide(ACTION_OVERRIDE[a]!)}>{ACTION_LABEL[a]}</button>)}
+      </div>
+      <span className="hint">Choosing an action re-runs this scenario with that decision at the first visit to the checkpoint.</span>
     </div>
   );
 }
