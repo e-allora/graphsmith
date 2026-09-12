@@ -26,7 +26,7 @@ npm test           # domain tests: simulator, lint, export, share, drafter
 npm run build      # static site in dist/
 ```
 
-Deploy: `npx vercel --prod`. The full product plan is in `graphsmith-demo.md`.
+Deploy: `npx vercel --prod`.
 
 ## Layout
 
