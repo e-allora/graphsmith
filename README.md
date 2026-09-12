@@ -2,7 +2,7 @@
 
 A design-time environment for graph-based AI and automation workflows. Describe a workflow, see it as Nodes, Edges, State, and Routers, run a safe mock simulation, read the readiness report, and export a specification.
 
-**Live demo:** https://graphsmith.vercel.app
+**Live demo:** https://graphsmith-alpha.vercel.app
 
 Prototype safely. Execute elsewhere. The demo cannot deploy a workflow, call a live service, store a credential, send a message, or change a record. Every run is a deterministic mock simulation on synthetic data, entirely in the browser.
 
