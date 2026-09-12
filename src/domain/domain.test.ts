@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { researchBriefProject } from './template';
+import { researchBriefProject, templates } from './template';
 import { simulate } from './simulate';
 import { lint } from './lint';
 import { toMermaid, toJson, toMarkdownBrief } from './exportFormats';
@@ -128,4 +128,20 @@ describe('drafter', () => {
     expect(r.ok && r.draft.safetyNotes.some((n) => n.includes('removed'))).toBe(true);
     expect(r.ok && JSON.stringify(r.draft.project)).not.toContain('sk-12345');
   });
+});
+
+describe('all templates', () => {
+  for (const [id, t] of Object.entries(templates)) {
+    it(`${id}: every scenario ends, outcomes match, lint has no gaps`, () => {
+      const sims = t.scenarios.map((sc) => simulate(t, sc));
+      for (const [i, sim] of sims.entries()) {
+        expect(sim.reachedEnd, `${id}/${t.scenarios[i].id}: ${sim.stoppedReason}`).toBe(true);
+        expect(sim.routerOutcomes, `${id}/${t.scenarios[i].id}`).toEqual(t.scenarios[i].expectedRouterOutcomes);
+      }
+      const r = lint(t, sims);
+      expect(r.gaps, r.findings.filter((x) => x.level === 'gap').map((x) => x.message).join('; ')).toBe(0);
+      expect(r.coverage.find((c) => c.label === 'Decision outcomes covered')!.done).toBe(r.coverage.find((c) => c.label === 'Decision outcomes covered')!.total);
+      expect(t.graph.nodes.filter((x) => x.category === 'human_review').every((x) => x.oversight)).toBe(true);
+    });
+  }
 });

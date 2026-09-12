@@ -191,12 +191,23 @@ export const researchBriefProject: GraphProject = {
   scenarios,
 };
 
-/** Other gallery templates are outlines only; the Research Brief Assistant is the interactive one. */
+import { supportTriageProject, documentIntakeProject } from './moreTemplates';
+
+export const templates: Record<string, GraphProject> = {
+  research_brief_assistant: researchBriefProject,
+  support_triage: supportTriageProject,
+  document_intake: documentIntakeProject,
+};
+
 export const templateGallery = [
-  { id: 'research_brief_assistant', name: 'Research Brief Assistant', summary: 'Plan, parallel research, coverage decision, human review, publish.', interactive: true },
-  { id: 'support_triage', name: 'Support Triage', summary: 'Classify a ticket, route by urgency, escalate to a person when unsure.', interactive: false },
-  { id: 'document_intake', name: 'Document Intake', summary: 'Extract fields, validate, ask for corrections, file the record.', interactive: false },
+  { id: 'research_brief_assistant', name: 'Research Brief Assistant', summary: 'Plan, parallel research, coverage decision, human review, publish.' },
+  { id: 'support_triage', name: 'Support Triage', summary: 'Classify a ticket, route urgent cases to a person, answer routine ones, keep an agent in the loop.' },
+  { id: 'document_intake', name: 'Document Intake', summary: 'Extract fields, validate, ask for corrections, privacy-review sensitive records, file.' },
 ];
+
+export function templateById(id: string | undefined): GraphProject {
+  return cloneProject(templates[id ?? ''] ?? researchBriefProject);
+}
 
 export function cloneProject(p: GraphProject): GraphProject {
   return JSON.parse(JSON.stringify(p)) as GraphProject;

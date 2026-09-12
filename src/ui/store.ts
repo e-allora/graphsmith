@@ -1,5 +1,5 @@
 import type { GraphProject, SimulationResult, GraphNode, Router, GraphEdge, StateField, NodeCategory } from '../domain/types';
-import { researchBriefProject, cloneProject } from '../domain/template';
+import { templateById } from '../domain/template';
 import { newId, validateNewEdge } from '../domain/graph';
 import type { SimulationOverrides } from '../domain/simulate';
 
@@ -137,6 +137,6 @@ export function addField(p: GraphProject): { project: GraphProject; id: string }
   const f: StateField = { id, name: id, description: 'Describe this field.', type: 'string', classification: 'internal', defaultValue: '', exportPolicy: 'include' };
   return { project: { ...p, stateSchema: { ...p.stateSchema, fields: [...p.stateSchema.fields, f] } }, id };
 }
-export function resetProject(): GraphProject {
-  return cloneProject(researchBriefProject);
+export function resetProject(templateId?: string): GraphProject {
+  return templateById(templateId);
 }

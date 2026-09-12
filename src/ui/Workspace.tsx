@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import type { GraphProject, NodeCategory } from '../domain/types';
-import { researchBriefProject, cloneProject, templateGallery } from '../domain/template';
+import { templateById, templateGallery } from '../domain/template';
 import { simulate, type SimulationOverrides } from '../domain/simulate';
 import { lint } from '../domain/lint';
 import { decodeShare, encodeShare } from '../domain/share';
@@ -33,9 +33,10 @@ const PALETTE: { cat: NodeCategory; label: string }[] = [
   { cat: 'output', label: '+ Add outcome' },
 ];
 
-export function Workspace({ shareToken }: { shareToken?: string }) {
+export function Workspace({ shareToken, templateId }: { shareToken?: string; templateId?: string }) {
   const shared = useMemo(() => (shareToken ? decodeShare(shareToken) : undefined), [shareToken]);
-  const [s, dispatch] = useReducer(reducer, undefined, () => initialState(shared ?? cloneProject(researchBriefProject), !!shared));
+  const [s, dispatch] = useReducer(reducer, undefined, () => initialState(shared ?? templateById(templateId), !!shared));
+  const [templateKey, setTemplateKey] = useState(templateId ?? 'research_brief_assistant');
   const [draftOpen, setDraftOpen] = useState(false);
   const [bottomOpen, setBottomOpen] = useState(true);
   const project = s.project;
@@ -136,7 +137,7 @@ export function Workspace({ shareToken }: { shareToken?: string }) {
           {!s.readOnly && <>
             <button className="btn sm ghost" onClick={() => dispatch({ type: 'undo' })} disabled={!s.past.length} title="Undo (Ctrl+Z)">Undo</button>
             <button className="btn sm ghost" onClick={() => dispatch({ type: 'redo' })} disabled={!s.future.length} title="Redo (Ctrl+Shift+Z)">Redo</button>
-            <button className="btn sm ghost" onClick={() => { commit(resetProject()); select(null); toast('Template restored.'); }}>Reset template</button>
+            <button className="btn sm ghost" onClick={() => { commit(resetProject(templateKey)); select(null); toast('Template restored.'); }}>Reset template</button>
             <button className="btn sm" onClick={() => setDraftOpen(true)}>✦ Draft from description</button>
           </>}
           {s.readOnly && <a className="btn sm" href="#/demo">Open the editable demo</a>}
@@ -159,9 +160,9 @@ export function Workspace({ shareToken }: { shareToken?: string }) {
           <div className="panel-body">
             {templateGallery.map((t) => (
               <div key={t.id} className={`tpl ${project.id === t.id ? 'active' : ''}`}>
-                <b>{t.name} {t.interactive ? <span className="badge accent">interactive</span> : <span className="badge">outline</span>}</b>
+                <b>{t.name}</b>
                 <small>{t.summary}</small>
-                {t.interactive && !s.readOnly && project.id !== t.id && <button className="btn sm" style={{ marginTop: 6 }} onClick={() => { commit(resetProject()); select(null); }}>Load</button>}
+                {!s.readOnly && project.id !== t.id && <button className="btn sm" style={{ marginTop: 6 }} onClick={() => { setTemplateKey(t.id); commit(resetProject(t.id)); select(null); window.location.hash = `#/demo?t=${t.id}`; }}>Load</button>}
               </div>
             ))}
           </div>

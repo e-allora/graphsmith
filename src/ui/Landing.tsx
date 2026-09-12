@@ -102,11 +102,11 @@ Publish brief  action · mocked · moderate impact`}</pre></div>
 
       <section className="section">
         <h2>Use cases in the demo</h2>
-        <p className="sub">One scenario is fully interactive. The other two show the shape of what comes next.</p>
+        <p className="sub">Three interactive templates. Each has five scripted scenarios, including a mock failure and a decision that abstains when its evidence is missing.</p>
         <div className="cards">
-          <div className="card"><h3>Research Brief Assistant <span className="badge accent">interactive</span></h3><p>Plan, research three sources in parallel, evaluate coverage, loop once if evidence is thin, get a human sign-off, publish. Four scripted scenarios including a mock tool failure.</p></div>
-          <div className="card"><h3>Support Triage <span className="badge">outline</span></h3><p>Classify a ticket, route by urgency with a visible rule, escalate to a person when the classifier is unsure.</p></div>
-          <div className="card"><h3>Document Intake <span className="badge">outline</span></h3><p>Extract fields, validate them, ask for corrections, file the record. Personal data fields are classified and redacted in exports.</p></div>
+          <a className="card" href="#/demo?t=research_brief_assistant" style={{ textDecoration: 'none', color: 'inherit' }}><h3>Research Brief Assistant <span className="badge accent">open</span></h3><p>Plan, research three sources in parallel, evaluate coverage, loop once if evidence is thin, get a human sign-off, publish.</p></a>
+          <a className="card" href="#/demo?t=support_triage" style={{ textDecoration: 'none', color: 'inherit' }}><h3>Support Triage <span className="badge accent">open</span></h3><p>Classify a ticket, hand urgent or unsafe cases to a person, answer routine ones from help articles, keep an agent in the loop when the draft is not confident.</p></a>
+          <a className="card" href="#/demo?t=document_intake" style={{ textDecoration: 'none', color: 'inherit' }}><h3>Document Intake <span className="badge accent">open</span></h3><p>Extract fields, validate, ask the submitter to correct, send sensitive records through a privacy reviewer, file. Personal fields are redacted in exports.</p></a>
         </div>
       </section>
 
