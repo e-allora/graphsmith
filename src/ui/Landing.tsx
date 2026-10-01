@@ -143,11 +143,11 @@ Publish brief  action · mocked · moderate impact`}</pre></div>
           </div>
           <div className="card">
             <h3>How it was made</h3>
-            <p>Idea, doctrine, and product direction: Robert Sweetman. The product critique was researched with Perplexity. The specification and this build were written with <a href="https://claude.com/claude-code">Claude Code</a>, Anthropic's coding agent, running Claude; the code, tests, and copy were produced in that collaboration. Built on <a href="https://reactflow.dev">React Flow</a>, React, and Vite. Source on <a href="https://github.com/e-allora/graphsmith">GitHub</a> under the Business Source License 1.1.</p>
+            <p>Idea, doctrine, and product direction: Robert Sweetman. The product critique was researched with Perplexity and refined with Google's Gemini. The specification and this build were written with <a href="https://claude.com/claude-code">Claude Code</a>, Anthropic's coding agent, running Claude Fable 5.1 (September 2026, per the commit records); the code, tests, and copy were produced in that collaboration. Built on <a href="https://reactflow.dev">React Flow</a>, React, and Vite. Source on <a href="https://github.com/e-allora/graphsmith">GitHub</a> under the Business Source License 1.1.</p>
           </div>
         </div>
         <div className="note" style={{ marginTop: 14 }}>
-          <b>Who is welcome.</b> Anyone. Graphsmith is meant to be built with people whose backgrounds, opinions, and skills differ from the founder's, and to credit them by name for what they contribute. If something here is wrong, uncredited, or exclusionary, say so and it gets fixed.
+          <b>Who is welcome.</b> Anyone. Graphsmith is meant to be built with people whose backgrounds, opinions, and skills differ from the founder's, and to credit them by name for what they contribute. If something here is wrong, uncredited, or exclusionary, <a href="https://github.com/e-allora/graphsmith/issues">say so on GitHub</a> and it gets fixed.
         </div>
       </section>
 
